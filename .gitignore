@@ -1,0 +1,20 @@
+# root .gitignore
+.env
+venv
+__pycache__/
+*.pyc
+
+# node
+node_modules/
+dist/
+.vite/
+
+# python
+.venv/
+.mypy_cache/
+.pytest_cache/
+
+# misc
+.DS_Store
+.idea/
+.vscode/
