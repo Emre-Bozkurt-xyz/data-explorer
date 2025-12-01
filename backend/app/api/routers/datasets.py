@@ -1,7 +1,11 @@
+# app/api/routers/datasets.py
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+
+from fastapi.responses import StreamingResponse
 
 from app.db.base import get_db
 from app.domain.schemas.dataset import (
@@ -16,6 +20,7 @@ from app.domain.services.dataset_service import (
 from app.domain.services.record_service import (
     list_records as svc_list_records,
     get_record_detail as svc_get_record_detail,
+    export_records_csv as svc_export_records_csv,
 )
 
 router = APIRouter(prefix="/api/v1/datasets", tags=["datasets"])
@@ -53,10 +58,18 @@ def get_dataset_records(
     search: Optional[str] = Query(
         None, description="Simple text search against record payload"
     ),
+    sort: Optional[str] = Query(
+        None,
+        description="Sort by field and direction, e.g. 'length:asc' or 'symbol:desc'",
+    ),
+    filter: Optional[str] = Query(  # noqa: A002
+        None,
+        description="Filter clauses, e.g. 'length:gt:1000,symbol:like:TP'",
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    List records for a dataset with pagination and simple text search.
+    List records for a dataset with pagination, search, sort, and filters.
     """
     return svc_list_records(
         db=db,
@@ -64,6 +77,53 @@ def get_dataset_records(
         page=page,
         limit=limit,
         search=search,
+        sort=sort,
+        filter_str=filter,
+    )
+
+
+# IMPORTANT: put this BEFORE /{dataset_id}/records/{record_id}
+@router.get("/{dataset_id}/records/export")
+def export_dataset_records(
+    dataset_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: Optional[str] = Query(
+        None, description="Simple text search against record payload"
+    ),
+    sort: Optional[str] = Query(
+        None,
+        description="Sort by field and direction, e.g. 'length:asc' or 'symbol:desc'",
+    ),
+    filter: Optional[str] = Query(  # noqa: A002
+        None,
+        description="Filter clauses, e.g. 'length:gt:1000,symbol:like:TP'",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Export the current page of records as CSV, using the same
+    search/sort/filter parameters as the JSON records endpoint.
+    """
+    csv_buf = svc_export_records_csv(
+        db=db,
+        dataset_id=dataset_id,
+        page=page,
+        limit=limit,
+        search=search,
+        sort=sort,
+        filter_str=filter,
+    )
+
+    csv_buf.seek(0)
+    filename = f"{dataset_id}_export.csv"
+
+    return StreamingResponse(
+        csv_buf,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
     )
 
 

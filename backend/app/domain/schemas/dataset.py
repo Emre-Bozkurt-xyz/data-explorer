@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any   # <- add Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -29,7 +29,8 @@ class DatasetFieldSummary(BaseModel):
     type: str
     null_frac: float
     distinct_count: Optional[int] = None
-    example_value: Optional[dict] = None
+    # was Optional[dict]
+    example_value: Optional[Any] = None   # <- key change
 
 
 class DatasetDetail(BaseModel):

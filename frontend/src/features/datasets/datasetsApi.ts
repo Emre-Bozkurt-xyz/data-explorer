@@ -1,4 +1,5 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { apiBaseQuery } from "../../app/apiClient";
 
 export interface DatasetSummary {
   id: string;
@@ -50,16 +51,17 @@ export interface PaginatedRecords {
 
 export interface ListDatasetRecordsArgs {
   datasetId: string;
-  page?: number;
-  limit?: number;
+  page: number;
+  limit: number;
   search?: string;
+  sort?: string;
+  filter?: string;
 }
+
 
 export const datasetsApi = createApi({
   reducerPath: "datasetsApi",
-  baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:8000/api",
-  }),
+  baseQuery: apiBaseQuery,
   endpoints: (builder) => ({
     listDatasets: builder.query<PaginatedDatasets, ListDatasetsArgs | void>({
       query: (args) => {
@@ -86,18 +88,16 @@ export const datasetsApi = createApi({
 
     // NEW: GET /api/v1/datasets/{id}/records
     listDatasetRecords: builder.query<PaginatedRecords, ListDatasetRecordsArgs>({
-      query: ({ datasetId, page = 1, limit = 25, search }) => {
-        const params = new URLSearchParams();
-        params.set("page", String(page));
-        params.set("limit", String(limit));
-        if (search) {
-          params.set("search", search);
-        }
-
-        return {
-          url: `/v1/datasets/${datasetId}/records?${params.toString()}`,
-        };
-      },
+      query: ({ datasetId, page, limit, search, sort, filter }) => ({
+        url: `/v1/datasets/${datasetId}/records`,
+        params: {
+          page,
+          limit,
+          search,
+          sort,
+          filter,
+        },
+      }),
     }),
   }),
 });

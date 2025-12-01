@@ -17,9 +17,10 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  Button,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import type { GridColDef } from "@mui/x-data-grid";
+import type { GridColDef, GridSortModel } from "@mui/x-data-grid";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
 import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 
@@ -38,15 +39,27 @@ import type { Bookmark } from "../bookmarks/bookmarksApi";
 
 const RECORDS_PAGE_SIZE = 25;
 
+// simple base URL for export; adjust if you already have a central config
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+
 export function DatasetDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   // Local UI state
   const [recordsPage, setRecordsPage] = useState(1);
   const [recordsSearch, setRecordsSearch] = useState("");
+  const [filterRaw, setFilterRaw] = useState("");
+  const [sortModel, setSortModel] = useState<GridSortModel>([]);
   const [localBookmarkedIds, setLocalBookmarkedIds] = useState<Set<number>>(
     () => new Set()
   );
+
+  // derive sort param for backend from DataGrid model
+  const sortParam =
+    sortModel[0]?.sort && sortModel[0]?.field
+      ? `${sortModel[0].field}:${sortModel[0].sort}`
+      : undefined;
 
   // Dataset + schema
   const {
@@ -57,7 +70,7 @@ export function DatasetDetailPage() {
     skip: !id,
   });
 
-  // Records
+  // Records (server-side pagination + search + sort + filter)
   const {
     data: records,
     isLoading: isRecordsLoading,
@@ -69,6 +82,8 @@ export function DatasetDetailPage() {
       page: recordsPage,
       limit: RECORDS_PAGE_SIZE,
       search: recordsSearch || undefined,
+      sort: sortParam,
+      filter: filterRaw || undefined,
     },
     {
       skip: !id,
@@ -77,7 +92,7 @@ export function DatasetDetailPage() {
 
   const recordsTotal = records?.total ?? 0;
 
-  // Bookmarks – load ALL for this user, filter client-side by dataset
+  // Bookmarks – load ALL and filter client-side by dataset
   const { data: bookmarksData } = useListBookmarksQuery(undefined);
   const [createBookmark] = useCreateBookmarkMutation();
   const [deleteBookmark] = useDeleteBookmarkMutation();
@@ -183,12 +198,27 @@ export function DatasetDetailPage() {
     }
   };
 
+  const handleExportCsv = () => {
+    if (!id) return;
+
+    const params = new URLSearchParams();
+    params.set("page", recordsPage.toString());
+    params.set("limit", RECORDS_PAGE_SIZE.toString());
+    if (recordsSearch) params.set("search", recordsSearch);
+    if (sortParam) params.set("sort", sortParam);
+    if (filterRaw) params.set("filter", filterRaw);
+
+    const url = `${API_BASE_URL}/datasets/${id}/records/export?${params.toString()}`;
+    window.location.href = url;
+  };
+
   // DataGrid columns
   const columns: GridColDef[] = [
     {
       field: "id",
       headerName: "ID",
       width: 80,
+      sortable: true,
     },
     {
       field: "payload",
@@ -299,7 +329,7 @@ export function DatasetDetailPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={3}>
+                      <TableCell colSpan={4}>
                         <Typography
                           variant="body2"
                           color="textSecondary"
@@ -319,21 +349,46 @@ export function DatasetDetailPage() {
         <Box sx={{ flexBasis: { md: "67%" }, flexGrow: 1 }}>
           <Paper sx={{ p: 2 }}>
             <Stack
-              direction="row"
+              direction={{ xs: "column", sm: "row" }}
               justifyContent="space-between"
-              alignItems="center"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              spacing={1}
               mb={2}
             >
               <Typography variant="h6">Records</Typography>
-              <TextField
-                size="small"
-                label="Search payload"
-                value={recordsSearch}
-                onChange={(e) => {
-                  setRecordsSearch(e.target.value);
-                  setRecordsPage(1);
-                }}
-              />
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "stretch", sm: "center" }}
+                sx={{ width: { xs: "100%", sm: "auto" } }}
+              >
+                <TextField
+                  size="small"
+                  label="Search payload"
+                  value={recordsSearch}
+                  onChange={(e) => {
+                    setRecordsSearch(e.target.value);
+                    setRecordsPage(1);
+                  }}
+                />
+                <TextField
+                  size="small"
+                  label="Filter (e.g. length:gt:1000)"
+                  value={filterRaw}
+                  onChange={(e) => {
+                    setFilterRaw(e.target.value);
+                    setRecordsPage(1);
+                  }}
+                />
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleExportCsv}
+                >
+                  Export CSV
+                </Button>
+              </Stack>
             </Stack>
 
             {isRecordsLoading && (
@@ -384,6 +439,12 @@ export function DatasetDetailPage() {
                   }}
                   onPaginationModelChange={(model) => {
                     setRecordsPage(model.page + 1);
+                  }}
+                  sortingMode="server"
+                  sortModel={sortModel}
+                  onSortModelChange={(model) => {
+                    setSortModel(model);
+                    setRecordsPage(1);
                   }}
                   loading={isRecordsLoading}
                   disableRowSelectionOnClick
