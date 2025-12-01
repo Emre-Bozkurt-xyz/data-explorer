@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import datasets as datasets_router
+from app.api.routers import bookmarks as bookmarks_router
 
 app = FastAPI(title="Data Explorer API", version="0.1.0")
 app.include_router(datasets_router.router)
+app.include_router(bookmarks_router.router)
 
 origins = [
     "http://localhost:5173",

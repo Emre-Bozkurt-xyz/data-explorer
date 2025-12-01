@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, List
 
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Dataset
 
@@ -33,3 +33,11 @@ def list_datasets(
 
     items = db.scalars(query).all()
     return items, total
+
+def get_dataset_with_fields(db: Session, dataset_id: str) -> Optional[Dataset]:
+    stmt = (
+        select(Dataset)
+        .options(selectinload(Dataset.fields))
+        .where(Dataset.id == dataset_id)
+    )
+    return db.scalars(stmt).first()
