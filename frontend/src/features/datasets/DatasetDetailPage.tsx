@@ -20,7 +20,11 @@ import {
   Button,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import type { GridColDef, GridSortModel } from "@mui/x-data-grid";
+import type {
+  GridColDef,
+  GridSortModel,
+  GridSortDirection,
+} from "@mui/x-data-grid";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
 import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 
@@ -37,29 +41,60 @@ import {
 } from "../bookmarks/bookmarksApi";
 import type { Bookmark } from "../bookmarks/bookmarksApi";
 
+import { useUrlState } from "../../hooks/useUrlState";
+
 const RECORDS_PAGE_SIZE = 25;
 
-// simple base URL for export; adjust if you already have a central config
+// Base URL for direct backend calls (CSV export).
+// Set VITE_API_URL in env to something like "http://localhost:8000/api/v1"
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 export function DatasetDetailPage() {
   const { id } = useParams<{ id: string }>();
 
-  // Local UI state
-  const [recordsPage, setRecordsPage] = useState(1);
-  const [recordsSearch, setRecordsSearch] = useState("");
-  const [filterRaw, setFilterRaw] = useState("");
-  const [sortModel, setSortModel] = useState<GridSortModel>([]);
-  const [localBookmarkedIds, setLocalBookmarkedIds] = useState<Set<number>>(
-    () => new Set()
-  );
+  // URL-backed state for records view
+  const [urlState, setUrlState] = useUrlState({
+    page: 1,
+    search: "",
+    filter: "",
+    sort: "", // "field:dir", e.g. "id:asc"
+  });
 
-  // derive sort param for backend from DataGrid model
-  const sortParam =
-    sortModel[0]?.sort && sortModel[0]?.field
-      ? `${sortModel[0].field}:${sortModel[0].sort}`
-      : undefined;
+  const recordsPage = urlState.page;
+  const recordsSearch = urlState.search;
+  const filterRaw = urlState.filter;
+  const sortParam = urlState.sort || undefined;
+
+  // DataGrid sort model derived from sortParam
+  const [sortModel, setSortModel] = useState<GridSortModel>(() => {
+    if (!sortParam) return [];
+    const [field, dir] = sortParam.split(":");
+    return [
+      {
+        field,
+        sort: dir as GridSortDirection,
+      },
+    ];
+  });
+
+  useEffect(() => {
+    if (!sortParam) {
+      setSortModel([]);
+      return;
+    }
+    const [field, dir] = sortParam.split(":");
+    setSortModel([
+      {
+        field,
+        sort: dir as GridSortDirection,
+      },
+    ]);
+  }, [sortParam]);
+
+  const [localBookmarkedIds, setLocalBookmarkedIds] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   // Dataset + schema
   const {
@@ -87,7 +122,7 @@ export function DatasetDetailPage() {
     },
     {
       skip: !id,
-    }
+    },
   );
 
   const recordsTotal = records?.total ?? 0;
@@ -114,8 +149,8 @@ export function DatasetDetailPage() {
       new Set(
         bookmarksData.items
           .filter((b) => b.dataset_id === id)
-          .map((b) => b.record_id)
-      )
+          .map((b) => b.record_id),
+      ),
     );
   }, [bookmarksData, id]);
 
@@ -368,8 +403,7 @@ export function DatasetDetailPage() {
                   label="Search payload"
                   value={recordsSearch}
                   onChange={(e) => {
-                    setRecordsSearch(e.target.value);
-                    setRecordsPage(1);
+                    setUrlState({ search: e.target.value, page: 1 });
                   }}
                 />
                 <TextField
@@ -377,8 +411,7 @@ export function DatasetDetailPage() {
                   label="Filter (e.g. length:gt:1000)"
                   value={filterRaw}
                   onChange={(e) => {
-                    setFilterRaw(e.target.value);
-                    setRecordsPage(1);
+                    setUrlState({ filter: e.target.value, page: 1 });
                   }}
                 />
                 <Button
@@ -434,21 +467,26 @@ export function DatasetDetailPage() {
                   rowCount={recordsTotal}
                   pageSizeOptions={[RECORDS_PAGE_SIZE]}
                   paginationModel={{
-                    page: recordsPage - 1, // 0-based for DataGrid
+                    page: recordsPage - 1, // DataGrid is 0-based
                     pageSize: RECORDS_PAGE_SIZE,
                   }}
                   onPaginationModelChange={(model) => {
-                    setRecordsPage(model.page + 1);
+                    setUrlState({ page: model.page + 1 });
                   }}
                   sortingMode="server"
                   sortModel={sortModel}
                   onSortModelChange={(model) => {
                     setSortModel(model);
-                    setRecordsPage(1);
+                    const first = model[0];
+                    const newSort =
+                      first && first.sort
+                        ? `${first.field}:${first.sort}`
+                        : "";
+                    setUrlState({ sort: newSort, page: 1 });
                   }}
                   loading={isRecordsLoading}
                   disableRowSelectionOnClick
-                  getRowHeight={() => "auto"} // allow multi-line payload
+                  getRowHeight={() => "auto"}
                 />
               </Box>
             )}

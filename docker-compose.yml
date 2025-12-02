@@ -13,5 +13,18 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  test_db:
+    image: postgres:16
+    container_name: dataexplorer_test_db
+    environment:
+      POSTGRES_DB: dataexplorer_test
+      POSTGRES_USER: dataexplorer
+      POSTGRES_PASSWORD: dataexplorer
+    ports:
+      - "5433:5432"
+    # ephemeral storage for tests (optional, but nice)
+    tmpfs:
+      - /var/lib/postgresql/data
+
 volumes:
   db_data:

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -20,6 +20,7 @@ import {
   useDeleteBookmarkMutation,
 } from "./bookmarksApi";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { useListDatasetsQuery } from "../datasets/datasetsApi";
 
 const PAGE_SIZE = 20;
 
@@ -34,6 +35,14 @@ export function BookmarksPage() {
 
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const { data: datasetsData } = useListDatasetsQuery({ page: 1, limit: 100 });
+  const datasetNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    datasetsData?.items.forEach((ds) => map.set(ds.id, ds.name));
+    return map;
+  }, [datasetsData]);
+
 
   return (
     <Box>
@@ -82,9 +91,9 @@ export function BookmarksPage() {
                 {data?.items?.length ? (
                   data.items.map((b) => (
                     <TableRow key={b.id}>
-                      <TableCell>{b.dataset_id}</TableCell>
+                      <TableCell>{datasetNameById.get(b.dataset_id) ?? b.dataset_id}</TableCell>
                       <TableCell
-                        sx={{ cursor: "pointer" }}
+                        sx={{ cursor: "pointer", color: "primary.main", textDecoration: "underline" }}
                         onClick={() => navigate(`/datasets/${b.dataset_id}`)}
                       >
                         {b.record_id}
