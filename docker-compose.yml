@@ -13,6 +13,30 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dataexplorer_backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://dataexplorer:dataexplorer@db:5432/dataexplorer
+      # add other envs your app expects here
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: dataexplorer_frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"  # host:container – see Dockerfile below
+
+  # Only used for tests (profile "test"), not started by default
   test_db:
     image: postgres:16
     container_name: dataexplorer_test_db
@@ -22,9 +46,9 @@ services:
       POSTGRES_PASSWORD: dataexplorer
     ports:
       - "5433:5432"
-    # ephemeral storage for tests (optional, but nice)
     tmpfs:
       - /var/lib/postgresql/data
+    profiles: ["test"]
 
 volumes:
   db_data:

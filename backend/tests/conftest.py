@@ -23,7 +23,8 @@ import app.db.models  # noqa: F401  # ensure all models are registered
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+psycopg://dataexplorer:dataexplorer@localhost:5433/dataexplorer_test",
+    # default assumes tests run inside a container on the same network as `test_db`
+    "postgresql+psycopg://dataexplorer:dataexplorer@test_db:5432/dataexplorer_test",
 )
 
 engine = create_engine(TEST_DATABASE_URL, future=True)

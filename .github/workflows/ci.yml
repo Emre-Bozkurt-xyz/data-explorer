@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dataexplorer
+          POSTGRES_PASSWORD: dataexplorer
+          POSTGRES_DB: dataexplorer_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dataexplorer -d dataexplorer_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      # Match tests/conftest TEST_DATABASE_URL, but on port 5432 inside CI
+      TEST_DATABASE_URL: postgresql+psycopg://dataexplorer:dataexplorer@localhost:5432/dataexplorer_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..15}; do
+            if pg_isready -h localhost -p 5432 -U dataexplorer; then
+              echo "Postgres is up"
+              exit 0
+            fi
+            echo "Waiting for Postgres..."
+            sleep 2
+          done
+          echo "Postgres did not start in time"
+          exit 1
+
+      - name: Run backend tests
+        working-directory: backend
+        run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint / test / build
+        working-directory: frontend
+        env:
+          # Just needs *some* value so Vite env exists at build time
+          VITE_API_BASE_URL: http://localhost:8000/api
+        run: |
+          npm run lint --if-present
+          npm run test --if-present
+          npm run build
